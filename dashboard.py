@@ -156,35 +156,43 @@ def get_daftar_emiten():
     except FileNotFoundError:
         return ["AALI - Astra Agro Lestari", "BBCA - Bank Central Asia", "SYSTEM - File emiten.txt tidak ditemukan"]
 
-# --- FUNGSI API (DENGAN KUNCI TIMEOUT MENTOK & ALARM) ---
+
+# --- FUNGSI API (VERSI CERIWIT / DETEKSI ERROR CLOUD) ---
 URL_API_PROD = "https://arisetiawan4545-api-get-system.hf.space" 
 
 def tarik_data_api(emiten, tahun, periode):
     url_api = f"{URL_API_PROD}/api/v1/laporan/{emiten}/{tahun}/{periode}"
     try:
-        # Timeout dinaikkan jadi 120 detik (2 Menit)
         res = requests.get(url_api, timeout=120) 
         if res.status_code == 200:
             return res.json()
         else:
-            print(f"Error {res.status_code} dari HF")
+            # BONGKAR ERROR: Munculkan status code mentah dari Hugging Face di Sidebar
+            st.sidebar.error(f"❌ Server HF Mengirim Kode: {res.status_code}")
+            try:
+                st.sidebar.code(f"Respon Mentah:\n{res.json()}")
+            except:
+                st.sidebar.code(f"Respon Mentah:\n{res.text}")
             return None
     except Exception as e:
-        st.error(f"Koneksi ke server API putus. Detail: {e}")
+        st.sidebar.error(f"❌ Jaringan Putus / Timeout ke HF. Detail: {e}")
         return None
 
 def tarik_data_rentang(emiten, t_awal, t_akhir, periode):
     url_api = f"{URL_API_PROD}/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
     try:
-        # Timeout dinaikkan jadi 600 detik (10 Menit) untuk beban berat massal!
         res = requests.get(url_api, timeout=600) 
         if res.status_code == 200:
             return res.json()
         else:
-            print(f"Error {res.status_code} dari HF di rentang")
+            st.sidebar.error(f"❌ Server HF Mengirim Kode Rentang: {res.status_code}")
+            try:
+                st.sidebar.code(f"Respon Mentah:\n{res.json()}")
+            except:
+                st.sidebar.code(f"Respon Mentah:\n{res.text}")
             return None
     except Exception as e:
-        st.error(f"Koneksi Timeout (Waktu Habis) dari server Hugging Face. Detail: {e}")
+        st.sidebar.error(f"❌ Jaringan Massal Putus. Detail: {e}")
         return None
 
 daftar_emiten_lengkap = get_daftar_emiten()
@@ -312,6 +320,10 @@ if app_mode == "Lihat Fundamental":
 
             else:
                 st.error(f"⚠️ Gagal mengekstrak data dari {emiten_input} untuk tahun {tahun_pilihan}.")
+                if data_utama and "hasil" in data_utama:
+                    st.info(f"🔍 Bisikan dari Backend: {data_utama['hasil'].get('pesan', 'Gagal tanpa alasan spesifik.')}")
+                else:
+                    st.info("💡 Petunjuk Analisis: Lirik ke panel SIDEBAR SEBELAH KIRI, gue udah buatin kotak ijo/merah buat ngintip respon mentah kenapa server Hugging Face lu nolak ngasih data!").")
 
     elif mode_ekstraksi == "Tren Historis (Multi-Tahun)":
         st.sidebar.markdown("---")
