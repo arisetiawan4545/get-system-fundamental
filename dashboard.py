@@ -6,6 +6,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 
+
 # --- INISIALISASI FIREBASE ---
 @st.cache_resource
 def init_firebase():
@@ -155,40 +156,42 @@ def get_daftar_emiten():
     except FileNotFoundError:
         return ["AALI - Astra Agro Lestari", "BBCA - Bank Central Asia", "SYSTEM - File emiten.txt tidak ditemukan"]
 
-# --- FUNGSI API ---
-
+# --- FUNGSI API (TERBARU: DENGAN ALARM ERROR & TIMEOUT PANJANG) ---
 URL_API_PROD = "https://arisetiawan4545-api-get-system.hf.space" 
 
 def tarik_data_api(emiten, tahun, periode):
-    # Mengarah ke server cloud, bukan localhost
     url_api = f"{URL_API_PROD}/api/v1/laporan/{emiten}/{tahun}/{periode}"
     try:
-        res = requests.get(url_api)
+        res = requests.get(url_api, timeout=60) # Waktu tunggu dinaikkan jadi 60 detik
         if res.status_code == 200:
             return res.json()
+        else:
+            st.error(f"⚠️ Gagal narik {periode.upper()} (Error {res.status_code}): Server Hugging Face nge-drop koneksinya.")
+            return None
     except Exception as e:
-        print(f"Error tarik_data_api: {e}")
+        st.error(f"⚠️ Koneksi putus saat narik {periode.upper()}: Timeout atau Server Down.")
         return None
-    return None
 
 def tarik_data_rentang(emiten, t_awal, t_akhir, periode):
-    # Mengarah ke server cloud, bukan localhost
     url_api = f"{URL_API_PROD}/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
     try:
-        res = requests.get(url_api)
+        res = requests.get(url_api, timeout=300) # Waktu tunggu dinaikkan maksimal jadi 5 MENIT!
         if res.status_code == 200:
             return res.json()
+        else:
+            st.error(f"⚠️ Gagal narik rentang {periode.upper()} (Error {res.status_code}): Hugging Face memutus paksa koneksi karena terlalu lama.")
+            return None
     except Exception as e:
-        print(f"Error tarik_data_rentang: {e}")
+        st.error(f"⚠️ Waktu tunggu habis (Timeout) saat membedah {periode.upper()} massal.")
         return None
-    return None
+
 daftar_emiten_lengkap = get_daftar_emiten()
 
 # =========================================================================
 # HEADER & LOGO GET SYSTEM FUNDAMENTAL
 # =========================================================================
 try:
-    st.image("icon.png", width=150)
+    st.image("icon.png", width=130)
 except FileNotFoundError:
     st.warning("⚠️ File 'icon.png' tidak ditemukan.")
 
@@ -370,7 +373,8 @@ if app_mode == "Lihat Fundamental":
                 kumpulkan_kuartal(data_q2, "Q2")
                 kumpulkan_kuartal(data_q3, "Q3")
                 
-                st.success(f"✅ Selesai! Data konsolidasi {emiten_input} berhasil dipisahkan.")
+                if data_tahunan or data_kuartal:
+                    st.success(f"✅ Selesai! Data konsolidasi {emiten_input} berhasil dipisahkan.")
                 
                 if data_tahunan:
                     df_tahun = pd.DataFrame(data_tahunan).set_index("Tahun")
@@ -394,6 +398,10 @@ if app_mode == "Lihat Fundamental":
                     st.dataframe(df_q_tabel.set_index("Kuartal").style.format({
                         "Aset (Rp)": "{:,.0f}", "Laba Bersih (Rp)": "{:,.0f}", "Pendapatan (Rp)": "{:,.0f}"
                     }), use_container_width=True)
+                else:
+                    # --- PERBAIKAN UI: Kalau kuartal kosong, munculkan pesan ini! ---
+                    st.markdown("<hr><h2 style='color: #00FF41;'>📅 Kinerja Kuartalan (Q1 - Q3)</h2>", unsafe_allow_html=True)
+                    st.warning("⚠️ Grafik kuartal tidak dapat ditampilkan karena koneksi diputus oleh Hugging Face atau datanya memang belum dirilis.")
 
             else:
                 with st.spinner(f"Membedah data {emiten_input} khusus {periode_pilihan} dari {tahun_awal} sampai {tahun_akhir}..."):
