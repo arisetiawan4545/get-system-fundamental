@@ -4,13 +4,21 @@ import pandas as pd
 import time
 import firebase_admin
 from firebase_admin import credentials, firestore
+import json
 
 # --- INISIALISASI FIREBASE ---
 @st.cache_resource
 def init_firebase():
     try:
         if not firebase_admin._apps:
-            cred = credentials.Certificate("firebase_key.json")
+            # 1. Kalau jalan di Server Streamlit (ambil dari Brankas)
+            if "FIREBASE_JSON" in st.secrets:
+                cred_dict = json.loads(st.secrets["FIREBASE_JSON"])
+                cred = credentials.Certificate(cred_dict)
+            # 2. Kalau jalan di komputer lu sendiri (ambil dari file lokal)
+            else:
+                cred = credentials.Certificate("firebase_key.json")
+            
             firebase_admin.initialize_app(cred)
         return firestore.client()
     except Exception as e:

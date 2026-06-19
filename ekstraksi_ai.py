@@ -1,5 +1,6 @@
 from google import genai
 
+
 api_key = "KUNCI_GUE_TARUH_DI_SECRETS"
 client = genai.Client(api_key=API_KEY)
 
