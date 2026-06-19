@@ -156,26 +156,32 @@ def get_daftar_emiten():
         return ["AALI - Astra Agro Lestari", "BBCA - Bank Central Asia", "SYSTEM - File emiten.txt tidak ditemukan"]
 
 # --- FUNGSI API ---
+
+URL_API_PROD = "https://arisetiawan4545-api-get-system.hf.space" 
+
 def tarik_data_api(emiten, tahun, periode):
-    url_api = f"http://127.0.0.1:8000/api/v1/laporan/{emiten}/{tahun}/{periode}"
+    # Mengarah ke server cloud, bukan localhost
+    url_api = f"{URL_API_PROD}/api/v1/laporan/{emiten}/{tahun}/{periode}"
     try:
         res = requests.get(url_api)
         if res.status_code == 200:
             return res.json()
-    except:
+    except Exception as e:
+        print(f"Error tarik_data_api: {e}")
         return None
     return None
 
 def tarik_data_rentang(emiten, t_awal, t_akhir, periode):
-    url_api = f"http://127.0.0.1:8000/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
+    # Mengarah ke server cloud, bukan localhost
+    url_api = f"{URL_API_PROD}/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
     try:
         res = requests.get(url_api)
         if res.status_code == 200:
             return res.json()
-    except:
+    except Exception as e:
+        print(f"Error tarik_data_rentang: {e}")
         return None
     return None
-
 daftar_emiten_lengkap = get_daftar_emiten()
 
 # =========================================================================
