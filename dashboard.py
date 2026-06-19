@@ -315,7 +315,7 @@ if app_mode == "Lihat Fundamental":
         map_periode = {"Audit (Tahunan)": "audit", "Q1": "q1", "Q2": "q2", "Q3": "q3"}
         periode_api = map_periode[periode_pilihan]
         
-        tombol_rentang = st.sidebar.button("🚀 Tarik Data Massal", use_container_width=True)
+        tombol_rentang = st.sidebar.button("Lihat Fundamental", use_container_width=True)
         
         if tombol_rentang and emiten_input and tahun_awal.isdigit() and tahun_akhir.isdigit():
             if periode_api == "audit":
