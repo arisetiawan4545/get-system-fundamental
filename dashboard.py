@@ -6,7 +6,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 
-
 # --- INISIALISASI FIREBASE ---
 @st.cache_resource
 def init_firebase():
@@ -23,6 +22,7 @@ def init_firebase():
             firebase_admin.initialize_app(cred)
         return firestore.client()
     except Exception as e:
+        st.sidebar.error(f"⚠️ Detail Error Firebase: {e}")
         return None
 
 db = init_firebase()
@@ -156,44 +156,34 @@ def get_daftar_emiten():
     except FileNotFoundError:
         return ["AALI - Astra Agro Lestari", "BBCA - Bank Central Asia", "SYSTEM - File emiten.txt tidak ditemukan"]
 
-
-# --- FUNGSI API (VERSI CERIWIT / DETEKSI ERROR CLOUD) ---
-URL_API_PROD = "https://arisetiawan4545-api-get-system.hf.space" 
+# =========================================================================
+# FUNGSI API (KEMBALI KE LOCALHOST NGEBUT)
+# =========================================================================
+BASE_URL = "http://127.0.0.1:8000"
 
 def tarik_data_api(emiten, tahun, periode):
-    url_api = f"{URL_API_PROD}/api/v1/laporan/{emiten}/{tahun}/{periode}"
+    # Mengarah ke server lokal kembali
+    url_api = f"{BASE_URL}/api/v1/laporan/{emiten}/{tahun}/{periode}"
     try:
-        res = requests.get(url_api, timeout=120) 
+        res = requests.get(url_api, timeout=15) # Timeout dibalikin 15 detik biar ngebut
         if res.status_code == 200:
             return res.json()
-        else:
-            # BONGKAR ERROR: Munculkan status code mentah dari Hugging Face di Sidebar
-            st.sidebar.error(f"❌ Server HF Mengirim Kode: {res.status_code}")
-            try:
-                st.sidebar.code(f"Respon Mentah:\n{res.json()}")
-            except:
-                st.sidebar.code(f"Respon Mentah:\n{res.text}")
-            return None
     except Exception as e:
-        st.sidebar.error(f"❌ Jaringan Putus / Timeout ke HF. Detail: {e}")
+        print(f"Error tarik_data_api: {e}")
         return None
+    return None
 
 def tarik_data_rentang(emiten, t_awal, t_akhir, periode):
-    url_api = f"{URL_API_PROD}/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
+    # Mengarah ke server lokal kembali
+    url_api = f"{BASE_URL}/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
     try:
-        res = requests.get(url_api, timeout=600) 
+        res = requests.get(url_api, timeout=30) # Timeout dibalikin 30 detik
         if res.status_code == 200:
             return res.json()
-        else:
-            st.sidebar.error(f"❌ Server HF Mengirim Kode Rentang: {res.status_code}")
-            try:
-                st.sidebar.code(f"Respon Mentah:\n{res.json()}")
-            except:
-                st.sidebar.code(f"Respon Mentah:\n{res.text}")
-            return None
     except Exception as e:
-        st.sidebar.error(f"❌ Jaringan Massal Putus. Detail: {e}")
+        print(f"Error tarik_data_rentang: {e}")
         return None
+    return None
 
 daftar_emiten_lengkap = get_daftar_emiten()
 
@@ -201,7 +191,7 @@ daftar_emiten_lengkap = get_daftar_emiten()
 # HEADER & LOGO GET SYSTEM FUNDAMENTAL
 # =========================================================================
 try:
-    st.image("icon.png", width=130)
+    st.image("icon.png", width=150)
 except FileNotFoundError:
     st.warning("⚠️ File 'icon.png' tidak ditemukan.")
 
@@ -320,10 +310,6 @@ if app_mode == "Lihat Fundamental":
 
             else:
                 st.error(f"⚠️ Gagal mengekstrak data dari {emiten_input} untuk tahun {tahun_pilihan}.")
-                if data_utama and "hasil" in data_utama:
-                    st.info(f"🔍 Bisikan dari Backend: {data_utama['hasil'].get('pesan', 'Gagal tanpa alasan spesifik.')}")
-                else:
-                    st.info("💡 Petunjuk Analisis: Lirik ke panel SIDEBAR SEBELAH KIRI, gue udah buatin kotak ijo/merah buat ngintip respon mentah kenapa server Hugging Face lu nolak ngasih data!")
 
     elif mode_ekstraksi == "Tren Historis (Multi-Tahun)":
         st.sidebar.markdown("---")
@@ -346,16 +332,10 @@ if app_mode == "Lihat Fundamental":
                 
                 with st.spinner("Membedah data Tahunan..."):
                     data_audit = tarik_data_rentang(emiten_input, tahun_awal, years_end:=tahun_akhir, "audit")
-                
-                time.sleep(3) # Kasih jeda napas 3 detik buat server HF
                 with st.spinner("Membedah data Q1..."):
                     data_q1 = tarik_data_rentang(emiten_input, tahun_awal, years_end, "q1")
-                
-                time.sleep(3) # Kasih jeda napas lagi
                 with st.spinner("Membedah data Q2..."):
                     data_q2 = tarik_data_rentang(emiten_input, tahun_awal, years_end, "q2")
-                
-                time.sleep(3) # Kasih jeda napas lagi
                 with st.spinner("Membedah data Q3..."):
                     data_q3 = tarik_data_rentang(emiten_input, tahun_awal, years_end, "q3")
                     
@@ -393,8 +373,7 @@ if app_mode == "Lihat Fundamental":
                 kumpulkan_kuartal(data_q2, "Q2")
                 kumpulkan_kuartal(data_q3, "Q3")
                 
-                if data_tahunan or data_kuartal:
-                    st.success(f"✅ Selesai! Data konsolidasi {emiten_input} berhasil dipisahkan.")
+                st.success(f"✅ Selesai! Data konsolidasi {emiten_input} berhasil dipisahkan.")
                 
                 if data_tahunan:
                     df_tahun = pd.DataFrame(data_tahunan).set_index("Tahun")
@@ -418,10 +397,6 @@ if app_mode == "Lihat Fundamental":
                     st.dataframe(df_q_tabel.set_index("Kuartal").style.format({
                         "Aset (Rp)": "{:,.0f}", "Laba Bersih (Rp)": "{:,.0f}", "Pendapatan (Rp)": "{:,.0f}"
                     }), use_container_width=True)
-                else:
-                    # --- PERBAIKAN UI: Kalau kuartal kosong, munculkan pesan ini! ---
-                    st.markdown("<hr><h2 style='color: #00FF41;'>📅 Kinerja Kuartalan (Q1 - Q3)</h2>", unsafe_allow_html=True)
-                    st.warning("⚠️ Grafik kuartal tidak dapat ditampilkan karena koneksi diputus oleh Hugging Face atau datanya memang belum dirilis.")
 
             else:
                 with st.spinner(f"Membedah data {emiten_input} khusus {periode_pilihan} dari {tahun_awal} sampai {tahun_akhir}..."):
