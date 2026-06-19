@@ -1,18 +1,25 @@
+import os
+import streamlit as st # Tambahan wajib buat baca brankas
 from google import genai
 
+# --- 1. AMBIL KUNCI DARI BRANKAS / LOKAL ---
+try:
+    kunci_rahasia = st.secrets["GCP_API_KEY"]
+except (FileNotFoundError, KeyError):
+    kunci_rahasia = os.environ.get("GCP_API_KEY", "")
 
-api_key = "KUNCI_GUE_TARUH_DI_SECRETS"
-client = genai.Client(api_key=API_KEY)
+if not kunci_rahasia:
+    print("⚠️ Kunci API tidak ditemukan!")
+
+client = genai.Client(api_key=kunci_rahasia)
 
 def ekstrak_pdf_pakai_ai(nama_file):
     print("🚀 Membangunkan Robot AI Flash 2.5...")
     
     try:
-       
         print(f"📂 Mengunggah dokumen {nama_file}...")
         uploaded_file = client.files.upload(file=nama_file)
         
-    
         prompt = """
         Kamu adalah sistem ekstraksi data keuangan otomatis.
         Baca dokumen laporan keuangan ini dan temukan 3 nilai utama untuk tahun penuh 2023:
@@ -36,7 +43,6 @@ def ekstrak_pdf_pakai_ai(nama_file):
         
         print("🧠 AI sedang membaca tabel dan mengekstrak angka. Tunggu sekitar 3-5 detik...")
         
-        
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[uploaded_file, prompt]
@@ -48,5 +54,10 @@ def ekstrak_pdf_pakai_ai(nama_file):
     except Exception as e:
         print(f"❌ Terjadi kesalahan saat menghubungi AI: {str(e)}")
 
-
-ekstrak_pdf_pakai_ai("potongan_BBRI.pdf")
+# PENTING: Dibungkus biar gak otomatis jalan pas di-import sama app.py
+if __name__ == "__main__":
+    # Pastikan file potongan_BBRI.pdf ada di folder yang sama kalau mau test langsung file ini
+    try:
+        ekstrak_pdf_pakai_ai("potongan_BBRI.pdf")
+    except FileNotFoundError:
+        print("File potongan_BBRI.pdf tidak ditemukan untuk dites.")

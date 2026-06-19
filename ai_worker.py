@@ -1,12 +1,23 @@
 import os
 import fitz  
 import json
+import streamlit as st # WAJIB TAMBAHIN INI BUAT BACA SECRETS
 from google import genai
 from google.genai import types  
 
 # --- 1. KONFIGURASI API KEY ---
-api_key = "KUNCI_GUE_TARUH_DI_SECRETS"
-client = genai.Client(api_key=API_KEY)
+# Cek apakah lagi jalan di cloud (punya st.secrets) atau lokal (pakai os.environ)
+try:
+    api_key = st.secrets["GCP_API_KEY"]
+except (FileNotFoundError, KeyError):
+    # Kalau di lokal (komputer lu), dia akan nyari dari environment variable atau .env
+    api_key = os.environ.get("GCP_API_KEY", "KUNCI_LOKAL_LU_KLO_MAU_DITULIS_DISINI")
+
+if not api_key:
+    raise ValueError("GCP_API_KEY tidak ditemukan! Cek Secrets atau file .env lu.")
+
+client = genai.Client(api_key=api_key)
+
 
 def ekstrak_keuangan_otomatis(nama_file_asli):
     print(f"🤖 [ROBOT ADMIN] Memulai operasi bedah dokumen: {nama_file_asli}")
