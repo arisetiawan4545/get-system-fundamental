@@ -2,3 +2,7 @@ streamlit
 requests
 pandas
 firebase-admin
+google-genai
+PyMuPDF
+fastapi
+uvicorn
