@@ -3,12 +3,13 @@ import json
 import re
 import PyPDF2
 from google import genai
+from dotenv import load_dotenv
 
-
+load_dotenv()
 kunci_rahasia = os.environ.get("GCP_API_KEY")
 if not kunci_rahasia:
     print("⚠️ PERINGATAN: Kunci API tidak ditemukan di Environment Variables!")
-    # Bisa tambahkan exit(1) di sini kalau mau scriptnya langsung berhenti
+    
 
 client = genai.Client(api_key=kunci_rahasia)
 

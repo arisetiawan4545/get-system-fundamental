@@ -6,9 +6,21 @@ import re
 import time
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware # TAMBAHAN 1: Import CORS
 from ekstraksi_ai import ekstrak_keuangan_otomatis
 
 app = FastAPI(title="IDX Data Provider API (Hybrid AI + Rentang Waktu)")
+
+# =========================================================
+# TAMBAHAN 2: BUKA JALUR CORS BIAR STREAMLIT BISA MASUK
+# =========================================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 TAXONOMY_MAP = {
     "umum": {
@@ -53,7 +65,6 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
 
     idx_url = f"https://www.idx.co.id/primary/ListedCompany/GetFinancialReport?indexFrom=1&pageSize=50&year={tahun}&periode={periode_idx}&reportType=rdf&emitentipe=&kodeEmiten={kode_emiten}"
     
-   # GANTI BLOK HEADERS LAMA DENGAN INI
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
@@ -78,8 +89,8 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
         
         link_xbrl = None
         link_pdf = None 
-        nama_file_xbrl = "Dokumen XBRL" # Default name
-        nama_file_pdf = "Dokumen PDF"   # Default name
+        nama_file_xbrl = "Dokumen XBRL" 
+        nama_file_pdf = "Dokumen PDF"   
         tipe = "Tidak ada data"
 
         for hasil in hasil_pencarian:
@@ -128,8 +139,8 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
                     "tahun": tahun,
                     "status": "sukses",
                     "metode_ekstraksi": "XBRL Asli IDX",
-                    "nama_dokumen": nama_file_xbrl,  # FITUR BARU
-                    "link_dokumen": link_xbrl,       # FITUR BARU
+                    "nama_dokumen": nama_file_xbrl,  
+                    "link_dokumen": link_xbrl,       
                     "data": data_keuangan_bersih
                 }
 
@@ -152,8 +163,8 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
                     "tahun": tahun,
                     "status": "sukses",
                     "metode_ekstraksi": hasil_ai["metode_ekstraksi"],
-                    "nama_dokumen": nama_file_pdf,  # FITUR BARU
-                    "link_dokumen": link_pdf,       # FITUR BARU
+                    "nama_dokumen": nama_file_pdf,  
+                    "link_dokumen": link_pdf,       
                     "data": hasil_ai["data_keuangan"]
                 }
             else:
@@ -174,18 +185,17 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
 def read_root():
     return {"status": "aktif", "pesan": "Mesin API IDX menyala. Siap mode Rentang Tahun!"}
 
-# Endpoint 1: Versi Satuan (Lama)
+# Endpoint 1: Versi Satuan
 @app.get("/api/v1/laporan/{kode_emiten}/{tahun}/{periode}")
 def get_laporan_idx(kode_emiten: str, tahun: str, periode: str):
     print(f"🚀 Menjalankan ekstraksi tunggal: {kode_emiten} Tahun {tahun}")
     hasil = proses_satu_laporan(kode_emiten, tahun, periode)
     return {"emiten": kode_emiten.upper(), "periode": periode.upper(), "hasil": hasil}
 
-# Endpoint 2: Versi Rentang Tahun (Baru!)
+# Endpoint 2: Versi Rentang Tahun
 @app.get("/api/v1/rentang/{kode_emiten}/{tahun_awal}/{tahun_akhir}/{periode}")
 def get_laporan_rentang(kode_emiten: str, tahun_awal: int, tahun_akhir: int, periode: str):
     
-    # Validasi logika tahun (biar nggak kebalik masukinnya)
     if tahun_awal > tahun_akhir:
         raise HTTPException(status_code=400, detail="Tahun awal tidak boleh lebih besar dari tahun akhir.")
         
@@ -193,9 +203,7 @@ def get_laporan_rentang(kode_emiten: str, tahun_awal: int, tahun_akhir: int, per
     
     data_historis = []
     
-    # Looping dari tahun_awal sampai tahun_akhir
     for thn in range(tahun_awal, tahun_akhir + 1):
-        # Jeda 2 detik antar tahun biar nggak di-banned IDX / Gemini Limit
         if thn > tahun_awal:
             time.sleep(2)
             

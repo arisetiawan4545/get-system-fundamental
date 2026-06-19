@@ -3,8 +3,9 @@ requests
 pandas
 firebase-admin
 google-genai
-PyMuPDF
+PyPDF2
 fastapi
 uvicorn
 beautifulsoup4
 lxml
+python-dotenv
