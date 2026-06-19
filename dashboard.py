@@ -323,7 +323,7 @@ if app_mode == "Lihat Fundamental":
                 if data_utama and "hasil" in data_utama:
                     st.info(f"🔍 Bisikan dari Backend: {data_utama['hasil'].get('pesan', 'Gagal tanpa alasan spesifik.')}")
                 else:
-                    st.info("💡 Petunjuk Analisis: Lirik ke panel SIDEBAR SEBELAH KIRI, gue udah buatin kotak ijo/merah buat ngintip respon mentah kenapa server Hugging Face lu nolak ngasih data!").")
+                    st.info("💡 Petunjuk Analisis: Lirik ke panel SIDEBAR SEBELAH KIRI, gue udah buatin kotak ijo/merah buat ngintip respon mentah kenapa server Hugging Face lu nolak ngasih data!")
 
     elif mode_ekstraksi == "Tren Historis (Multi-Tahun)":
         st.sidebar.markdown("---")
