@@ -156,33 +156,35 @@ def get_daftar_emiten():
     except FileNotFoundError:
         return ["AALI - Astra Agro Lestari", "BBCA - Bank Central Asia", "SYSTEM - File emiten.txt tidak ditemukan"]
 
-# --- FUNGSI API (TERBARU: DENGAN ALARM ERROR & TIMEOUT PANJANG) ---
+# --- FUNGSI API (DENGAN KUNCI TIMEOUT MENTOK & ALARM) ---
 URL_API_PROD = "https://arisetiawan4545-api-get-system.hf.space" 
 
 def tarik_data_api(emiten, tahun, periode):
     url_api = f"{URL_API_PROD}/api/v1/laporan/{emiten}/{tahun}/{periode}"
     try:
-        res = requests.get(url_api, timeout=60) # Waktu tunggu dinaikkan jadi 60 detik
+        # Timeout dinaikkan jadi 120 detik (2 Menit)
+        res = requests.get(url_api, timeout=120) 
         if res.status_code == 200:
             return res.json()
         else:
-            st.error(f"⚠️ Gagal narik {periode.upper()} (Error {res.status_code}): Server Hugging Face nge-drop koneksinya.")
+            print(f"Error {res.status_code} dari HF")
             return None
     except Exception as e:
-        st.error(f"⚠️ Koneksi putus saat narik {periode.upper()}: Timeout atau Server Down.")
+        st.error(f"Koneksi ke server API putus. Detail: {e}")
         return None
 
 def tarik_data_rentang(emiten, t_awal, t_akhir, periode):
     url_api = f"{URL_API_PROD}/api/v1/rentang/{emiten}/{t_awal}/{t_akhir}/{periode}"
     try:
-        res = requests.get(url_api, timeout=300) # Waktu tunggu dinaikkan maksimal jadi 5 MENIT!
+        # Timeout dinaikkan jadi 600 detik (10 Menit) untuk beban berat massal!
+        res = requests.get(url_api, timeout=600) 
         if res.status_code == 200:
             return res.json()
         else:
-            st.error(f"⚠️ Gagal narik rentang {periode.upper()} (Error {res.status_code}): Hugging Face memutus paksa koneksi karena terlalu lama.")
+            print(f"Error {res.status_code} dari HF di rentang")
             return None
     except Exception as e:
-        st.error(f"⚠️ Waktu tunggu habis (Timeout) saat membedah {periode.upper()} massal.")
+        st.error(f"Koneksi Timeout (Waktu Habis) dari server Hugging Face. Detail: {e}")
         return None
 
 daftar_emiten_lengkap = get_daftar_emiten()
@@ -332,10 +334,16 @@ if app_mode == "Lihat Fundamental":
                 
                 with st.spinner("Membedah data Tahunan..."):
                     data_audit = tarik_data_rentang(emiten_input, tahun_awal, years_end:=tahun_akhir, "audit")
+                
+                time.sleep(3) # Kasih jeda napas 3 detik buat server HF
                 with st.spinner("Membedah data Q1..."):
                     data_q1 = tarik_data_rentang(emiten_input, tahun_awal, years_end, "q1")
+                
+                time.sleep(3) # Kasih jeda napas lagi
                 with st.spinner("Membedah data Q2..."):
                     data_q2 = tarik_data_rentang(emiten_input, tahun_awal, years_end, "q2")
+                
+                time.sleep(3) # Kasih jeda napas lagi
                 with st.spinner("Membedah data Q3..."):
                     data_q3 = tarik_data_rentang(emiten_input, tahun_awal, years_end, "q3")
                     
