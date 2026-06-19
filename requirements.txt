@@ -6,3 +6,4 @@ google-genai
 PyMuPDF
 fastapi
 uvicorn
+beautifulsoup4
