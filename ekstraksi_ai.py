@@ -1,63 +1,102 @@
 import os
-import streamlit as st # Tambahan wajib buat baca brankas
+import json
+import re
+import PyPDF2
 from google import genai
 
-# --- 1. AMBIL KUNCI DARI BRANKAS / LOKAL ---
-try:
-    kunci_rahasia = st.secrets["GCP_API_KEY"]
-except (FileNotFoundError, KeyError):
-    kunci_rahasia = os.environ.get("GCP_API_KEY", "")
 
+kunci_rahasia = os.environ.get("GCP_API_KEY")
 if not kunci_rahasia:
-    print("⚠️ Kunci API tidak ditemukan!")
+    print("⚠️ PERINGATAN: Kunci API tidak ditemukan di Environment Variables!")
+    # Bisa tambahkan exit(1) di sini kalau mau scriptnya langsung berhenti
 
 client = genai.Client(api_key=kunci_rahasia)
 
-def ekstrak_pdf_pakai_ai(nama_file):
-    print("🚀 Membangunkan Robot AI Flash 2.5...")
+# =====================================================================
+# 2. METODE GANDA: RANGKUM PDF LOKAL -> TERJEMAHKAN VIA AI
+# =====================================================================
+def ekstrak_keuangan_otomatis(nama_file):
+    print(f"🚀 Memulai Metode Ganda untuk {nama_file}...")
     
+    # ---------------------------------------------------------
+    # TAHAP 1: RANGKUM DATA (Ekstrak Teks Lokal)
+    # ---------------------------------------------------------
+    print("📄 Tahap 1: Merangkum data teks dari PDF lokal...")
+    teks_rangkuman = ""
     try:
-        print(f"📂 Mengunggah dokumen {nama_file}...")
-        uploaded_file = client.files.upload(file=nama_file)
-        
-        prompt = """
-        Kamu adalah sistem ekstraksi data keuangan otomatis.
-        Baca dokumen laporan keuangan ini dan temukan 3 nilai utama untuk tahun penuh 2023:
+        with open(nama_file, 'rb') as file:
+            reader = PyPDF2.PdfReader(file)
+            jumlah_halaman = len(reader.pages)
+            batas_halaman = min(20, jumlah_halaman)
+            for page_num in range(batas_halaman):
+                halaman = reader.pages[page_num]
+                teks = halaman.extract_text()
+                if teks:
+                    teks_rangkuman += teks + "\n"
+                    
+    except Exception as e:
+        print(f"❌ Gagal merangkum PDF: {e}")
+        return {"status": "gagal", "pesan": f"Sistem gagal merangkum PDF lokal: {str(e)}"}
+
+    if not teks_rangkuman.strip():
+        return {"status": "gagal", "pesan": "PDF tidak mengandung teks (mungkin dokumen hasil scan gambar/blur)."}
+
+    # ---------------------------------------------------------
+    # TAHAP 2: TERJEMAHKAN PAKAI AI GEMINI
+    # ---------------------------------------------------------
+    print("🧠 Tahap 2: AI sedang menerjemahkan teks menjadi JSON...")
+    try:
+        prompt = f"""
+        Kamu adalah sistem ekstraksi data keuangan. 
+        Tugasmu menerjemahkan teks laporan keuangan yang sudah dirangkum ini dan temukan 3 nilai utama:
         1. Total Aset
-        2. Laba Bersih Tahun Berjalan (Profit for the year)
-        3. Pendapatan (Bunga / Revenue)
+        2. Laba Bersih Tahun Berjalan (Profit for the year / Laba Rugi Bersih)
+        3. Pendapatan (Bunga / Revenue / Total Pendapatan Operasional)
 
         Aturan ketat: 
         - Jawab HANYA menggunakan struktur JSON murni.
-        - Jangan tambahkan teks pengantar atau penjelasan apa pun.
-        - Angka harus berupa integer (bilangan bulat utuh tanpa titik atau koma).
+        - Jangan gunakan format markdown ```json.
+        - Angka harus berupa integer bulat (tanpa titik atau koma).
         - Jika data tidak ditemukan, isi dengan angka 0.
 
-        Format:
-        {
-            "Total_Aset": 1234567890,
-            "Laba_Rugi_Bersih": 123456,
-            "Pendapatan": 123456
-        }
+        Berikut adalah teks laporannya:
+        {teks_rangkuman}
         """
-        
-        print("🧠 AI sedang membaca tabel dan mengekstrak angka. Tunggu sekitar 3-5 detik...")
         
         response = client.models.generate_content(
             model='gemini-2.5-flash',
-            contents=[uploaded_file, prompt]
+            contents=prompt
         )
         
-        print("\n🎉 BINGO! Ini hasil dari AI:")
-        print(response.text)
+        # Bersihkan balasan AI dari sisa-sisa markdown
+        raw_text = response.text.strip()
+        raw_text = re.sub(r'```json\s*', '', raw_text)
+        raw_text = re.sub(r'```', '', raw_text).strip()
         
+        data_json = json.loads(raw_text)
+        print("🎉 BINGO! AI berhasil menerjemahkan data.")
+        
+        return {
+            "status": "sukses",
+            "metode_ekstraksi": "AI Ekstraksi Ganda (PyPDF + Gemini)",
+            "data_keuangan": data_json
+        }
+        
+    except json.JSONDecodeError:
+        print(f"❌ AI gagal merespons JSON. Raw text: {response.text}")
+        return {"status": "gagal", "pesan": "AI gagal memberikan format JSON yang valid."}
     except Exception as e:
-        print(f"❌ Terjadi kesalahan saat menghubungi AI: {str(e)}")
+        print(f"❌ Terjadi kesalahan saat menghubungi AI: {e}")
+        return {"status": "gagal", "pesan": f"Gagal menerjemahkan via AI: {str(e)}"}
 
-# PENTING: Dibungkus biar gak otomatis jalan pas di-import sama app.py
+# =====================================================================
+# 3. BLOK TESTING
+# =====================================================================
 if __name__ == "__main__":
-    # Pastikan file potongan_BBRI.pdf ada di folder yang sama kalau mau test langsung file ini
-    try:
-        ekstrak_pdf_pakai_ai("potongan_BBRI.pdf")
-    except FileNotFoundError:
-        print("File potongan_BBRI.pdf tidak ditemukan untuk dites.")
+    file_test = "potongan_BBRI.pdf"
+    if os.path.exists(file_test):
+        hasil = ekstrak_keuangan_otomatis(file_test)
+        print("\n=== HASIL AKHIR ===")
+        print(json.dumps(hasil, indent=4))
+    else:
+        print("Siap digunakan sebagai modul.")

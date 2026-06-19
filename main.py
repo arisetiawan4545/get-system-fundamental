@@ -6,7 +6,7 @@ import re
 import time
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException
-from ai_worker import ekstrak_keuangan_otomatis
+from ekstraksi_ai import ekstrak_keuangan_otomatis
 
 app = FastAPI(title="IDX Data Provider API (Hybrid AI + Rentang Waktu)")
 
@@ -53,10 +53,16 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
 
     idx_url = f"https://www.idx.co.id/primary/ListedCompany/GetFinancialReport?indexFrom=1&pageSize=50&year={tahun}&periode={periode_idx}&reportType=rdf&emitentipe=&kodeEmiten={kode_emiten}"
     
+   # GANTI BLOK HEADERS LAMA DENGAN INI
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
-        "Referer": "https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan"
+        "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.idx.co.id/id/perusahaan-tercatat/laporan-keuangan-dan-tahunan",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin"
     }
 
     try:
@@ -72,6 +78,8 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
         
         link_xbrl = None
         link_pdf = None 
+        nama_file_xbrl = "Dokumen XBRL" # Default name
+        nama_file_pdf = "Dokumen PDF"   # Default name
         tipe = "Tidak ada data"
 
         for hasil in hasil_pencarian:
@@ -79,18 +87,22 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
                 nama_file = file.get("File_Name", "")
                 nama_file_lower = nama_file.lower()
                 
-                # 1. Cari XBRL
+                # 1. Cari XBRL dan simpan nama filenya
                 if "instance.zip" in nama_file_lower:
                     link_xbrl = f"https://www.idx.co.id{file.get('File_Path', '')}"
+                    nama_file_xbrl = nama_file
                 elif link_xbrl is None and "xbrl" in nama_file_lower and "inline" not in nama_file_lower:
                     link_xbrl = f"https://www.idx.co.id{file.get('File_Path', '')}"
+                    nama_file_xbrl = nama_file
 
-                # 2. Cari PDF
+                # 2. Cari PDF dan simpan nama filenya
                 if nama_file_lower.endswith(".pdf"):
                     if "financial" in nama_file_lower or "lk" in nama_file_lower:
                         link_pdf = f"https://www.idx.co.id{file.get('File_Path', '')}"
+                        nama_file_pdf = nama_file
                     elif link_pdf is None:
                         link_pdf = f"https://www.idx.co.id{file.get('File_Path', '')}"
+                        nama_file_pdf = nama_file
 
         data_keuangan_bersih = {"Total_Aset": 0, "Laba_Rugi_Bersih": 0, "Pendapatan": 0}
         
@@ -116,6 +128,8 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
                     "tahun": tahun,
                     "status": "sukses",
                     "metode_ekstraksi": "XBRL Asli IDX",
+                    "nama_dokumen": nama_file_xbrl,  # FITUR BARU
+                    "link_dokumen": link_xbrl,       # FITUR BARU
                     "data": data_keuangan_bersih
                 }
 
@@ -138,6 +152,8 @@ def proses_satu_laporan(kode_emiten: str, tahun: str, periode: str):
                     "tahun": tahun,
                     "status": "sukses",
                     "metode_ekstraksi": hasil_ai["metode_ekstraksi"],
+                    "nama_dokumen": nama_file_pdf,  # FITUR BARU
+                    "link_dokumen": link_pdf,       # FITUR BARU
                     "data": hasil_ai["data_keuangan"]
                 }
             else:

@@ -1,29 +1,32 @@
 import os
 import fitz  
 import json
-import streamlit as st # WAJIB TAMBAHIN INI BUAT BACA SECRETS
+import re
 from google import genai
 from google.genai import types  
 
-# --- 1. KONFIGURASI API KEY ---
-# Cek apakah lagi jalan di cloud (punya st.secrets) atau lokal (pakai os.environ)
-try:
-    api_key = st.secrets["GCP_API_KEY"]
-except (FileNotFoundError, KeyError):
-    # Kalau di lokal (komputer lu), dia akan nyari dari environment variable atau .env
-    api_key = os.environ.get("GCP_API_KEY", "KUNCI_LOKAL_LU_KLO_MAU_DITULIS_DISINI")
+# --- 1. KONFIGURASI API KEY (HARDCODE BACKEND) ---
+# Masukkan API Key lu yang baru (jangan pakai yang lama yang udah bocor!)
+api_key = "MASUKAN_API_KEY_BARU_LU_DISINI"
 
-if not api_key:
-    raise ValueError("GCP_API_KEY tidak ditemukan! Cek Secrets atau file .env lu.")
+if not api_key or api_key == "MASUKAN_API_KEY_BARU_LU_DISINI":
+    print("⚠️ PERINGATAN: Kunci API masih kosong!")
 
 client = genai.Client(api_key=api_key)
-
 
 def ekstrak_keuangan_otomatis(nama_file_asli):
     print(f"🤖 [ROBOT ADMIN] Memulai operasi bedah dokumen: {nama_file_asli}")
     
-    file_potongan_sementara = "temp_potongan.pdf"
+    file_potongan_sementara = f"temp_potongan_{os.path.basename(nama_file_asli)}"
     
+    # Deteksi Tahun/Periode dari nama file agar Prompt Dinamis
+    # Contoh format masuk: temp_BBCA_2023_TW1.pdf
+    prompt_tambahan = "periode berjalan sesuai dokumen"
+    if "temp_" in nama_file_asli:
+        parts = os.path.basename(nama_file_asli).replace(".pdf", "").split("_")
+        if len(parts) >= 4:
+            prompt_tambahan = f"Tahun {parts[2]} Periode {parts[3]}"
+
     # ==========================================
     # FASE 1: PEMOTONGAN PDF (Otak Pencari)
     # ==========================================
@@ -32,17 +35,18 @@ def ekstrak_keuangan_otomatis(nama_file_asli):
         dokumen = fitz.open(nama_file_asli)
         halaman_target = set()
         
-        # Kata kunci akuntansi
+        # Kata kunci akuntansi (Indonesia & Inggris)
         kata_kunci = ["laporan posisi keuangan", "statement of financial position", "laporan laba rugi", "statement of profit or loss"]
         
-        batas_halaman = min(20, len(dokumen))
+        batas_halaman = min(150, len(dokumen))
         for i in range(batas_halaman):
             teks = dokumen[i].get_text("text").lower()
             if any(kata in teks for kata in kata_kunci):
                 halaman_target.add(i)
         
         if not halaman_target:
-            return {"status": "gagal", "pesan": "Halaman laporan keuangan tidak ditemukan di 20 halaman pertama."}
+            dokumen.close()
+            return {"status": "gagal", "pesan": f"Halaman laporan keuangan tidak ditemukan di {batas_halaman} halaman pertama."}
 
         list_halaman = sorted(list(halaman_target))
         dokumen_baru = fitz.open()
@@ -60,38 +64,34 @@ def ekstrak_keuangan_otomatis(nama_file_asli):
     # ==========================================
     # FASE 2: EKSTRAKSI AI (Otak Eksekutor Kaku)
     # ==========================================
+    uploaded_file = None
     try:
         print("🧠 Menganalisis angka menggunakan Gemini 2.5 Flash (Mode Konsisten)...")
         uploaded_file = client.files.upload(file=file_potongan_sementara)
         
-        # Prompt diperketat fokus pada data KONSOLIDASIAN (Consolidated)
-        prompt = """
+        prompt = f"""
         Kamu adalah sistem ekstraksi data keuangan otomatis bersertifikasi.
-        Baca dokumen ini dan temukan 3 nilai utama untuk tahun penuh 2023.
+        Baca dokumen ini dan temukan 3 nilai utama untuk {prompt_tambahan}.
         
         PENTING: Ambil angka dari kolom KONSOLIDASIAN (CONSOLIDATED) jika ada pilihan.
         
-        Format wajib:
-        {
+        Format wajib (hanya output JSON tanpa markdown):
+        {{
             "Total_Aset": 1234567890,
             "Laba_Rugi_Bersih": 123456,
             "Pendapatan": 123456
-        }
+        }}
         """
         
-        # --- EKSEKUSI DENGAN CONFIG TEMPERATUR 0.0 ---
+        # Eksekusi dengan Strict JSON Configuration
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=[uploaded_file, prompt],
             config=types.GenerateContentConfig(
-                temperature=0.0,                  # <--- KUNCI KREATIVITAS JADI 0 (ANTI-NGANTOX)
-                response_mime_type="application/json" # <--- PAKSA HARUS KELUAR JSON BERSIH
+                temperature=0.0,
+                response_mime_type="application/json" 
             )
         )
-        
-        if os.path.exists(file_potongan_temporary := file_potongan_sementara):
-            os.remove(file_potongan_temporary)
-            print("🧹 Membersihkan file sementara...")
             
         teks_ai = response.text.strip()
         data_json = json.loads(teks_ai)
@@ -99,16 +99,36 @@ def ekstrak_keuangan_otomatis(nama_file_asli):
         return {
             "status": "sukses",
             "metode_ekstraksi": "AI Vision (Gemini 2.5 - Deterministic Mode)",
-            "data_keuangan": data_json
+            "data": data_json
         }
         
     except Exception as e:
-        if os.path.exists(file_potongan_sementara):
-            os.remove(file_potongan_sementara)
         return {"status": "gagal", "pesan": f"AI Error: {e}"}
+        
+    finally:
+        # ==========================================
+        # CLEANUP PROTOCOL (WAJIB ADA)
+        # ==========================================
+        # 1. Hapus file sementara di lokal
+        if os.path.exists(file_potongan_sementara):
+            try:
+                os.remove(file_potongan_sementara)
+            except: pass
+            
+        # 2. Hapus dokumen rahasia dari Server Google Cloud (PENTING!)
+        if uploaded_file:
+            try:
+                client.files.delete(name=uploaded_file.name)
+                print("🧹 Jejak dokumen di server Google berhasil dihapus.")
+            except Exception as e:
+                print(f"⚠️ Gagal menghapus file dari server Google: {e}")
 
 if __name__ == "__main__":
-    file_target = "FinancialStatement-2023-Tahunan-BBRI.pdf"
-    hasil_akhir = ekstrak_keuangan_otomatis(file_target)
-    print("\n🎯 HASIL AKHIR (Bentuk Data Python Asli):")
-    print(hasil_akhir)
+    # Pastikan ada file dummy buat testing
+    file_target = "FinancialStatement-2023-Tahunan-BBCA.pdf"
+    if os.path.exists(file_target):
+        hasil_akhir = ekstrak_keuangan_otomatis(file_target)
+        print("\n🎯 HASIL AKHIR (Bentuk Data Python Asli):")
+        print(json.dumps(hasil_akhir, indent=4))
+    else:
+        print(f"File {file_target} tidak ditemukan. Siap digunakan sebagai modul impor.")
